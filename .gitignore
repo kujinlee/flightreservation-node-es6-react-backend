@@ -1,0 +1,43 @@
+# Node.js dependencies
+node_modules/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+
+# Build output
+dist/
+build/
+
+# IDE-specific files
+.vscode/
+.idea/
+*.swp
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Certificates
+*.crt
+*.key
+*.pem
+
+# MySQL data directory
+mysql-data/
+
+# Prettier ignore file
+.prettierignore
+
+# Coverage directory
+coverage/
