@@ -5,6 +5,11 @@ import Passenger from '../models/passenger.js';
 import logger from '../utils/logger.js';
 import { validateFields } from '../utils/validateFields.js';
 
+import express from 'express';
+const app = express();
+
+app.use(express.json()); // Ensure JSON parsing middleware is applied
+
 export const findFlights = asyncHandler(async (req, res) => {
   const { from, to, departureDate } = req.body;
 
@@ -18,7 +23,7 @@ export const findFlights = asyncHandler(async (req, res) => {
     });
 
     if (flights.length > 0) {
-      res.status(200).json({ flights }); // Explicitly set status 200
+      res.status(200).json({ flights });
     } else {
       res
         .status(404)
@@ -34,12 +39,12 @@ export const completeCheckIn = asyncHandler(async (req, res) => {
   const { reservationId, numberOfBags } = req.body;
 
   try {
-    logger.debug('MYLOG: Check-in request body:', req.body);
+    logger.debug('Check-in request body:', req.body);
 
     const reservation = await Reservation.findByPk(reservationId, {
       include: [
-        { model: Flight, as: 'flight' }, // Include flight details
-        { model: Passenger, as: 'passenger' }, // Include passenger details
+        { model: Flight, as: 'flight' },
+        { model: Passenger, as: 'passenger' },
       ],
     });
 
@@ -47,18 +52,15 @@ export const completeCheckIn = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: 'Reservation not found' });
     }
 
-    logger.debug('MYLOG: Reservation before update:', reservation.toJSON());
+    logger.debug('Reservation before update:', reservation.toJSON());
 
-    // Update the reservation with the number of bags and mark it as checked in
     reservation.numberOfBags = numberOfBags;
     reservation.checkedIn = true;
 
-    // Ensure the save method is called
     await reservation.save();
 
-    logger.debug('MYLOG: Reservation after update:', reservation.toJSON());
+    logger.debug('Reservation after update:', reservation.toJSON());
 
-    // Return confirmation details as JSON
     res.json({
       message: 'Check-in completed successfully!',
       reservation: reservation.toJSON(),
@@ -91,13 +93,11 @@ export const createReservation = asyncHandler(async (req, res) => {
       email,
     });
 
-    // Validate passenger fields
     validateFields(
       { firstName, lastName, middleName, email, phone },
       Passenger
     );
 
-    // Save passenger information
     const passenger = await Passenger.create({
       firstName,
       lastName,
@@ -108,10 +108,8 @@ export const createReservation = asyncHandler(async (req, res) => {
 
     logger.debug('Passenger created:', passenger.toJSON());
 
-    // Validate reservation fields
     validateFields({ flightId, cardNumber, amount }, Reservation);
 
-    // Create the reservation
     const reservation = await Reservation.create({
       flightId,
       passengerId: passenger.id,
@@ -121,7 +119,6 @@ export const createReservation = asyncHandler(async (req, res) => {
 
     logger.debug('Reservation created:', reservation.toJSON());
 
-    // Fetch flight details
     const flightDetails = await Flight.findByPk(flightId, {
       attributes: [
         'flightNumber',
@@ -131,21 +128,16 @@ export const createReservation = asyncHandler(async (req, res) => {
         'estimatedDepartureTime',
       ],
     });
+
     if (!flightDetails) {
       logger.debug('Flight not found for reservation:', { flightId });
       return res.status(404).json({ message: 'Flight not found' });
     }
 
-    logger.debug(
-      'Flight details fetched for reservation:',
-      flightDetails.toJSON()
-    );
-
-    // Return reservation details as JSON
     res.json({
       reservation: {
         ...reservation.toJSON(),
-        amount: Number(reservation.amount), // Ensure amount is a number
+        amount: Number(reservation.amount),
       },
       flightDetails: flightDetails.toJSON(),
       passengerDetails: {
@@ -155,34 +147,55 @@ export const createReservation = asyncHandler(async (req, res) => {
       message: 'Reservation created successfully!',
     });
   } catch (error) {
+    if (error.name === 'SequelizeValidationError') {
+      const validationErrors = error.errors.map((err) => ({
+        field: err.path,
+        message: err.message,
+      }));
+      return res
+        .status(400)
+        .json({ message: 'Validation error', errors: validationErrors });
+    }
     console.error('Error creating reservation:', error);
-    res.status(500).json({ message: 'Internal server error.' });
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 
 export const completeReservation = asyncHandler(async (req, res) => {
+  console.log('Received request body:', req.body); // Log the entire request body
   const { reservationId } = req.body;
+  console.log('Extracted reservationId:', reservationId); // Log the extracted reservationId
 
   if (!reservationId) {
+    console.error('Reservation ID is missing in the request body');
     return res.status(400).json({ message: 'Reservation ID is required' });
   }
 
   try {
-    // Fetch reservation and associated passenger
+    const reservationCount = await Reservation.count();
+    if (reservationCount === 0) {
+      console.error('No reservations found in the database');
+      return res
+        .status(404)
+        .json({ message: 'No reservations found in the database' });
+    }
+
     const reservation = await Reservation.findByPk(reservationId, {
       include: [{ model: Passenger, as: 'passenger' }],
     });
+
     if (!reservation) {
+      console.error('Reservation not found for ID:', reservationId);
       return res.status(404).json({ message: 'Reservation not found' });
     }
 
-    // Placeholder for external payment processing
+    console.log('Reservation found:', reservation.toJSON());
+
     const paymentSuccess = processPayment(
       reservation.cardNumber,
       reservation.amount
     );
 
-    // Fetch flight details
     const flightDetails = await Flight.findByPk(reservation.flightId, {
       attributes: [
         'flightNumber',
@@ -192,11 +205,14 @@ export const completeReservation = asyncHandler(async (req, res) => {
         'estimatedDepartureTime',
       ],
     });
+
     if (!flightDetails) {
+      console.error('Flight not found for ID:', reservation.flightId);
       return res.status(404).json({ message: 'Flight not found' });
     }
 
-    // Return confirmation details as JSON
+    console.log('Flight details found:', flightDetails.toJSON());
+
     res.json({
       message: paymentSuccess
         ? 'Payment processed successfully! You can now check in.'
@@ -233,7 +249,6 @@ export const renderCheckInPage = asyncHandler(async (req, res) => {
       return res.status(404).json({ message: 'Reservation not found' });
     }
 
-    // Return reservation details as JSON
     res.json({
       message: 'Check-in page data retrieved successfully!',
       reservation: reservation.toJSON(),
@@ -246,9 +261,16 @@ export const renderCheckInPage = asyncHandler(async (req, res) => {
   }
 });
 
-// Simulates an external payment processing system
 function processPayment(cardNumber, amount) {
   logger.debug(`Processing payment for card: ${cardNumber}, amount: ${amount}`);
-  // Simulate payment success
-  return true; // Always returns true for now, but can be extended for real payment logic
+  return true; // Simulate payment success
 }
+
+app.use((err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(err.status || 500).json({ error: err.message });
+});
+
+export default app;
