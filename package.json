@@ -8,7 +8,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "lint:fix": "eslint --fix .",
-    "test": "jest"
+    "test": "node --max-old-space-size=4096 --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.mjs"
   },
   "keywords": [],
   "author": "",

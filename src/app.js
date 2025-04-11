@@ -30,7 +30,14 @@ app.use(
 app.use(express.json()); // To parse JSON request bodies
 app.use(express.urlencoded({ extended: true })); // Parses URL-encoded bodies
 app.set('view engine', 'ejs');
-app.set('views', path.join(path.dirname(fileURLToPath(import.meta.url)), 'views')); // Convert import.meta.url to file path
+
+// Use mocked `import.meta` in test environment
+const __dirname =
+  process.env.NODE_ENV === 'test'
+    ? global.importMeta.dirname
+    : path.dirname(fileURLToPath(import.meta.url));
+
+app.set('views', path.join(__dirname, 'views')); // Convert import.meta.url to file path
 
 // Set global base URL
 const BASE_URL =
@@ -53,7 +60,6 @@ let server;
 
 if (USE_HTTPS && process.env.NODE_ENV !== 'test') {
   try {
-    const __dirname = path.dirname(fileURLToPath(import.meta.url)); // Convert import.meta.url to file path
     const sslOptions = {
       key: fs.readFileSync(path.join(__dirname, '../certs/key.pem')),
       cert: fs.readFileSync(path.join(__dirname, '../certs/cert.pem')),
